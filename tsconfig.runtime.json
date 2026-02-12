@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    // Point aliases to compiled output
+    "baseUrl": "./dist",
+    "paths": { "@/*": ["*"] }
+  }
+}
