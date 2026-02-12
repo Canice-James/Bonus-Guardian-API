@@ -1,0 +1,16 @@
+export const PAYMENT_METHODS = {
+  CC: 'Credit Card',
+  BC: 'Bitcoin',
+  MP: 'MatchPay',
+  BSV: 'Bitcoin SV',
+  BCH: 'Bitcoin Cash',
+  ETH: 'Ethereum',
+  USDT: 'USDT',
+  LTC: 'Litecoin',
+  BCL: 'Bitcoin Lightning',
+  VCH: 'Voucher',
+  TTP: 'Player Transfer',
+  CBT: 'Cross-brand Transfer',
+  INE: 'Interac e-Transfer',
+  DBT: 'DBT',
+};
