@@ -1,17 +1,36 @@
-import { convertTo24HourFormat, defaultEndTime, defaultStartTime, getESTString, getETDate, getETTime, validateEndDate, validateRecurrenceEndTime, validateRecurrenceStartTime, validateRecurrenceType, validateStartTime } from '@/utils/custom';
+import {
+  convertTo24HourFormat,
+  defaultEndTime,
+  defaultStartTime,
+  getESTString,
+  getETDate,
+  getETTime,
+  validateEndDate,
+  validateRecurrenceEndTime,
+  validateRecurrenceStartTime,
+  validateRecurrenceType,
+  validateStartTime,
+  parseNY,
+  parseJiraDT,
+} from '@/utils/custom';
+
 import { FieldValidation } from '@/validator/types';
 
 export const startDate: FieldValidation = ({ bonusData, jiraData }) => {
 
   if (bonusData.type === 'CUSTOMER_SERVICE') return null;
 
+  const rmDate = bonusData?.startDateTime
+    ? getETDate(bonusData.startDateTime)
+    : null;
+
   return {
     fieldName: 'Start Date',
-    rmValue: getETDate(new Date(bonusData?.startDateTime)),
-    jiraValue: jiraData?.startDate,
+    rmValue: rmDate ?? 'No',
+    jiraValue: jiraData?.startDate ?? 'No',
     passed:
-      jiraData?.startDate ===
-      getETDate(new Date(bonusData?.startDateTime)),
+      (!jiraData?.startDate && !rmDate) ||
+      jiraData?.startDate === rmDate,
     canBeIgnored: true
   };
 };
@@ -20,13 +39,17 @@ export const endDate: FieldValidation = ({ bonusData, jiraData }) => {
 
   if (bonusData.type === 'CUSTOMER_SERVICE') return null;
 
+  const rmDate = bonusData?.endDateTime
+    ? getETDate(bonusData.endDateTime)
+    : null;
+
   return {
     fieldName: 'End Date',
-    rmValue: bonusData?.endDateTime
-      ? getESTString(new Date(bonusData?.endDateTime))
-      : 'No',
+    rmValue: rmDate ?? 'No',
     jiraValue: jiraData?.endDate ?? 'No',
-    passed: validateEndDate(jiraData?.endDate, bonusData?.endDateTime),
+    passed:
+      (!jiraData?.endDate && !rmDate) ||
+      jiraData?.endDate === rmDate,
   };
 };
 
@@ -34,32 +57,55 @@ export const startTime: FieldValidation = ({ bonusData, jiraData }) => {
 
   if (bonusData.type === 'CUSTOMER_SERVICE') return null;
 
+  const rmMoment = bonusData?.startDateTime
+    ? parseNY(bonusData.startDateTime)
+    : null;
+
+  const rmRaw = rmMoment ? rmMoment.format('HH:mm:ss') : null;
+  const rmDisplay = rmMoment ? rmMoment.format('hh:mm A') : null;
+
+  const jiraParsed = parseJiraDT(jiraData?.startTime);
+
+  const jiraRaw = jiraParsed
+    ? jiraParsed.format('HH:mm:ss')
+    : defaultStartTime;
+
   return {
     fieldName: 'Start Time',
-    rmValue: bonusData?.startDateTime
-      ? getETTime(new Date(bonusData?.startDateTime))?.match(
-          /(\d{1,2}:\d{2}:\d{2})/,
-        )?.[1] || 'No'
-      : 'No',
-    jiraValue: jiraData?.startTime
-      ? getESTString(new Date(jiraData?.startTime)).match(
-          /(\d{1,2}:\d{2}:\d{2})/,
-        )?.[1] || 'Default'
-      : 'Default',
-    passed: validateStartTime(
-      convertTo24HourFormat(
-        jiraData?.startTime
-          ? jiraData.startTime.match(/T(\d{2}:\d{2}:\d{2})/)?.[1]
-          : null,
-      ),
-      convertTo24HourFormat(
-        getETTime(new Date(bonusData?.startDateTime))?.match(
-          /(\d{1,2}:\d{2}:\d{2})/,
-        )?.[1],
-      ),
+    rmValue: rmDisplay ?? 'No',
+    jiraValue: jiraParsed ? jiraParsed.format('hh:mm A') : 'Default',
+    passed: rmRaw !== null && validateStartTime(
+      convertTo24HourFormat(jiraRaw),
+      convertTo24HourFormat(rmRaw),
       bonusData.currency,
     ),
     canBeIgnored: true
+  };
+};
+
+export const endTime: FieldValidation = ({ bonusData, jiraData }) => {
+
+  if (bonusData.type === 'CUSTOMER_SERVICE') return null;
+
+  const rmMoment = bonusData?.endDateTime
+    ? parseNY(bonusData.endDateTime)
+    : null;
+
+  const rmRaw = rmMoment ? rmMoment.format('HH:mm:ss') : null;
+  const rmDisplay = rmMoment ? rmMoment.format('hh:mm A') : null;
+
+  const jiraParsed = parseJiraDT(jiraData?.endTime);
+
+  const jiraRaw = jiraParsed
+    ? jiraParsed.format('HH:mm:ss')
+    : defaultEndTime;
+
+  return {
+    fieldName: 'End Time',
+    rmValue: rmDisplay ?? 'No',
+    jiraValue: jiraParsed ? jiraParsed.format('hh:mm A') : 'Default',
+    passed: rmRaw !== null && jiraRaw === rmRaw,
+    canBeIgnored: true,
   };
 };
 
@@ -80,6 +126,7 @@ export const maxDaysAvailable: FieldValidation = ({ bonusData, jiraData }) => {
   if (bonusData.type === 'CUSTOMER_SERVICE') return null;
 
   if (!bonusData?.maxDaysAvailable && !jiraData?.maxDaysAvailable) return null;
+
   return {
     fieldName: 'Max Days Available',
     rmValue: bonusData?.targeted
@@ -129,28 +176,22 @@ export const recurrenceStartTime: FieldValidation = ({
     jiraData?.recurrencePeriod === 'No Recurrence'
   )
     return null;
+
+  const jiraTime = convertTo24HourFormat(
+    jiraData?.startTime
+      ? parseJiraDT(jiraData.startTime)?.format('HH:mm:ss') ??
+          defaultStartTime
+      : defaultStartTime,
+  );
+
   return {
     fieldName: 'Recurrence Start Time',
     rmValue: bonusData?.recurrenceStartTime ?? 'No',
-    jiraValue: jiraData?.recurrencePeriod
-      ? convertTo24HourFormat(
-          jiraData?.startTime
-            ? (jiraData.startTime.match(/T(\d{2}:\d{2}:\d{2})/)?.[1] ??
-                defaultStartTime)
-            : defaultStartTime,
-        ) || 'No'
-      : 'No',
-    passed: jiraData?.recurrencePeriod
-      ? validateRecurrenceStartTime(
-          convertTo24HourFormat(
-            jiraData?.startTime
-              ? (jiraData.startTime.match(/T(\d{2}:\d{2}:\d{2})/)?.[1] ??
-                  defaultStartTime)
-              : defaultStartTime,
-          ),
-          bonusData?.recurrenceStartTime,
-        )
-      : true,
+    jiraValue: jiraTime ?? 'No',
+    passed: validateRecurrenceStartTime(
+      jiraTime,
+      bonusData?.recurrenceStartTime,
+    ),
     canBeIgnored: true
   };
 };
@@ -164,28 +205,22 @@ export const recurrenceEndTime: FieldValidation = ({ bonusData, jiraData }) => {
     jiraData?.recurrencePeriod === 'No Recurrence'
   )
     return null;
+
+  const jiraTime = convertTo24HourFormat(
+    jiraData?.endTime
+      ? parseJiraDT(jiraData.endTime)?.format('HH:mm:ss') ??
+          defaultEndTime
+      : defaultEndTime,
+  );
+
   return {
     fieldName: 'Recurrence End Time',
     rmValue: bonusData?.recurrenceEndTime ?? 'No',
-    jiraValue: jiraData?.recurrencePeriod
-      ? convertTo24HourFormat(
-          jiraData?.endTime
-            ? (jiraData.endTime.match(/T(\d{2}:\d{2}:\d{2})/)?.[1] ??
-                defaultEndTime)
-            : defaultEndTime,
-        ) || 'No'
-      : 'No',
-    passed: jiraData?.recurrencePeriod
-      ? validateRecurrenceEndTime(
-          convertTo24HourFormat(
-            jiraData?.endTime
-              ? (jiraData.endTime.match(/T(\d{2}:\d{2}:\d{2})/)?.[1] ??
-                  defaultEndTime)
-              : defaultEndTime,
-          ),
-          bonusData?.recurrenceEndTime,
-        )
-      : true,
+    jiraValue: jiraTime ?? 'No',
+    passed: validateRecurrenceEndTime(
+      jiraTime,
+      bonusData?.recurrenceEndTime,
+    ),
     canBeIgnored: true
   };
 };

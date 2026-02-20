@@ -8,6 +8,7 @@ import {
   recurrenceStartTime,
   startDate,
   startTime,
+  endTime,
 } from './validators';
 
 export const datesValidator: GroupValidation = ({ bonusData, jiraData }) => {
@@ -18,6 +19,7 @@ export const datesValidator: GroupValidation = ({ bonusData, jiraData }) => {
       startDate({ bonusData, jiraData }),
       endDate({ bonusData, jiraData }),
       startTime({ bonusData, jiraData }),
+      endTime({ bonusData, jiraData }),
       expiresInDays({ bonusData, jiraData }),
       maxDaysAvailable({ bonusData, jiraData }),
       recurrencePeriod({ bonusData, jiraData }),

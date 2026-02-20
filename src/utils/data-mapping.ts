@@ -5,6 +5,7 @@ import {
   getHorsesRollover,
   getPokerRollover,
   getSportsRollover,
+  parseJiraDT,
 } from './custom';
 import { get } from 'lodash';
 
@@ -114,17 +115,19 @@ export function getJiraFields(jiraData: TIssue) {
 
   const fields = {
     key: jiraData?.key,
-    brand: jiraData?.fields?.customfield_11209?.[0]?.value, //"Bovada.lv",Bodog.eu,CafeCasino.lv,IgnitionCasino.eu,Slots.lv,IgnitionCasino.buzz,JoeFortunePokies.eu,BVX audiences
+    brand: jiraData?.fields?.customfield_11209?.[0]?.value, //"Bovada.lv",Bodog.eu,CafeCasino.lv,CafeCasino.lv,IgnitionCasino.eu,Slots.lv,IgnitionCasino.buzz,JoeFortunePokies.eu,BVX audiences
     type: jiraData?.fields?.customfield_11243?.value, //Reload,Affiliate,Crypto Bonus,Customer Service Bonus,First Deposit,Free Bonus,Multi-Deposit,Other,Refer A Friend,Tier Bonus - Default,Tier Purchase,Tier Reload
     name: jiraData?.fields?.customfield_11241?.trim(), //NFL- 50% Reload Offer
     description: jiraData?.fields?.description, //will be moved to backend to not worth validating
     bonusCodes: jiraData?.fields?.customfield_11246
       ?.replaceAll(',', ' ')
       ?.split(' '),
-    startDate: jiraData?.fields?.customfield_11233,
     startTime: jiraData?.fields?.customfield_18101,
-    endDate: jiraData?.fields?.customfield_11234,
     endTime: jiraData?.fields?.customfield_18102,
+    startDate: jiraData?.fields?.customfield_11233 ??
+      (parseJiraDT(jiraData?.fields?.customfield_18101)?.format('YYYY-MM-DD') ?? null),
+    endDate: jiraData?.fields?.customfield_11234 ??
+      (parseJiraDT(jiraData?.fields?.customfield_18102)?.format('YYYY-MM-DD') ?? null),
     hasBonusReward: jiraData?.fields?.customfield_14740?.find(
       (item: { [key: string]: any }) => item?.value == 'Bonus Funds',
     )?.value,

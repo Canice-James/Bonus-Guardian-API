@@ -6,6 +6,44 @@ import moment from 'moment-timezone';
 
 // Determine overall passed status based on all groups
 
+const FIXED_OFFSET_MINUTES = -240;
+const TZ = 'America/New_York';
+
+export function parseJiraDT(value?: string | null) {
+  if (!value) return null;
+
+  const hasIso =
+    value.includes('T') || /([zZ]|[+-]\d{2}:?\d{2})$/.test(value);
+
+  if (hasIso) {
+    const m = moment.parseZone(value);
+    return m.isValid()
+      ? m.utcOffset(FIXED_OFFSET_MINUTES)
+      : null;
+  }
+
+  const m = moment(value, 'DD/MMM/YY h:mm A', true);
+  return m.isValid()
+    ? m.utcOffset(FIXED_OFFSET_MINUTES, true)
+    : null;
+}
+
+export function parseNY(input: string | Date) {
+  if (!input) return null;
+
+  if (typeof input === 'string') {
+    const hasTz = /([zZ]|[+-]\d{2}:?\d{2})$/.test(input);
+
+    if (hasTz) {
+      return moment.parseZone(input).utcOffset(FIXED_OFFSET_MINUTES);
+    }
+
+    return moment(input).utcOffset(FIXED_OFFSET_MINUTES, true);
+  }
+
+  return moment(input).utcOffset(FIXED_OFFSET_MINUTES);
+}
+
 export function validateArray<T>(
   arr: T[] | undefined,
   target: T[] | undefined,
@@ -22,7 +60,6 @@ function newESTDate(date: Date) {
   let adjustedTime = new Date(
     (date.getTime() - (pstOffset + timezoneOffset)) * 60 * 1000,
   );
-
   return adjustedTime;
 }
 
@@ -49,28 +86,14 @@ export function getESTString(date: Date) {
   return estDateTime;
 }
 
-export function getETTime(date: Date,) {
-  let easternTime = moment.utc(date).tz('America/New_York');
-
-  if (!easternTime.isDST()) {
-    easternTime = easternTime.add(1, 'hour');
-  }
-  // Format the output
-  const formattedTime = easternTime.format('YYYY-MM-DDTHH:mm:ss.SSSZZ');
-
-  return formattedTime;
+export function getETTime(date: string | Date) {
+  const m = parseNY(date);
+  return m ? m.format('YYYY-MM-DDTHH:mm:ss.SSSZZ') : null;
 }
 
-export function getETDate(date: Date) {
-  let easternTime = moment.utc(date).tz('America/New_York');
-
-  if (!easternTime.isDST()) {
-    easternTime = easternTime.add(1, 'hour');
-  }
-  // Format the output
-  const formattedTime = easternTime.format('YYYY-MM-DD');
-
-  return formattedTime;
+export function getETDate(date: string | Date) {
+  const m = parseNY(date);
+  return m ? m.format('YYYY-MM-DD') : null;
 }
 
 export function canUseDeposits(
@@ -128,17 +151,32 @@ export function validateStartTime(
   }
 }
 
-export function validateEndDate(jiraData: Date, bonus: Date) {
-  let bonusDate = bonus ? Date.parse(String(new Date(bonus))) : null;
-  let jiraDate = jiraData ? Date.parse(String(new Date(bonus))) : null;
-  let bonusTime = bonus
-    ? getESTString(new Date(bonus))?.substring(12, 20)
-    : null;
+export function validateEndDate(
+  jiraEndDate: string | undefined,
+  jiraEndTime: string | undefined,
+  bonusEndDateTime: Date | string | undefined,
+) {
+  if (!jiraEndDate && !bonusEndDateTime) return true;
+  if (!jiraEndDate || !bonusEndDateTime) return false;
 
-  let dateComparison = bonusDate == jiraDate;
-  // let timeComparison = bonusTime == '11:59:00';
+  const jiraTime =
+    jiraEndTime?.match(/T(\d{2}:\d{2}:\d{2})/)?.[1] ||
+    jiraEndTime?.match(/(\d{2}:\d{2}:\d{2})/)?.[1] ||
+    defaultEndTime;
 
-  return dateComparison;
+  const jiraExpected = moment(
+    `${jiraEndDate} ${jiraTime}`,
+    'YYYY-MM-DD HH:mm:ss',
+  ).utcOffset(FIXED_OFFSET_MINUTES, true);
+
+  const rmEnd = parseNY(bonusEndDateTime as any);
+
+  if (!rmEnd) return false;
+
+  return (
+    jiraExpected.format('YYYY-MM-DD HH:mm:ss') ===
+    rmEnd.format('YYYY-MM-DD HH:mm:ss')
+  );
 }
 
 export function validateRecurrenceType(jiraData: string, bonus: string) {
@@ -183,7 +221,6 @@ export function sameMembers(
 //     'JoeFortunePokies.eu': 'JFN',
 //     'BVX audiences': 'BVX',
 //   };
-
 //   return domainBrands[domain];
 // }
 
@@ -238,10 +275,10 @@ export function validateRolloverBase(jiraData: string, bonus: string) {
 }
 
 export function validateTargetType(jiraData: string, bonus: TgetBonusFields) {
-
   const targetTypeMapping = {
     'MASS (All Players)': bonus?.targeted === false,
-    'TARGETED (Select Players)': bonus?.targeted === true || bonus?.hasPointsPriceByTier === true,
+    'TARGETED (Select Players)':
+      bonus?.targeted === true || bonus?.hasPointsPriceByTier === true,
     None: bonus?.targeted === true,
   };
 
@@ -252,50 +289,51 @@ export function getCasinoRollover(string: string) {
   let match =
     /(\d+)(?=\sX+\sCASINO|\sX+CASINO|XCASINO|X+\sCASINO|\sCASINO|CASINO)/g;
   if (typeof string !== 'string') return null;
-  return string.toUpperCase().match(match)?.[0] ?? string.toUpperCase().match(match);
+  return string.toUpperCase().match(match);
 }
 
 export function getPokerRollover(string: string) {
   let match = /(\d+)(?=\sX+\sPOKER|\sX+POKER|XPOKER|X+\sPOKER|\sPOKER|POKER)/g;
   if (typeof string !== 'string') return null;
-  return string.toUpperCase().match(match)?.[0] ?? string.toUpperCase().match(match);
+  return string.toUpperCase().match(match);
 }
 
 export function getSportsRollover(string: string) {
   let match = /(\d+)(?=\sX+\sSPORT|\sX+SPORT|XSPORT|X+\sSPORT|\sSPORT|SPORT)/g;
   if (typeof string !== 'string') return null;
-  return string.toUpperCase().match(match)?.[0] ?? string.toUpperCase().match(match);
+  return string.toUpperCase().match(match);
 }
 
 export function getHorsesRollover(string: string) {
   let match = /(\d+)(?=\sX+\sHORSE|\sX+HORSE|XHORSE|X+\sHORSE|\sHORSE|HORSE)/g;
   if (typeof string !== 'string') return null;
-  return string.toUpperCase().match(match)?.[0] ?? string.toUpperCase().match(match);
+  return string.toUpperCase().match(match);
 }
 
 // export function regionCurrencyMapping(id) {
 //   let region = BRAND_REGIONS?.find((region) => region?.REGION_UUID === id);
-
 //   if (region) {
 //     const REGION_CURRENCY = {
 //       AUS: 'AUD',
 //       UFM: 'USD',
 //       CAN: 'CAD',
 //     };
-
 //     return REGION_CURRENCY[region?.BUSINESS_REGION];
 //   }
-
 //   return null;
 // }
 
 export function removeEmptyItems(array: []) {
   if (Array.isArray(array)) {
     return array.filter((item) => {
-      const check1 = String(item).toLocaleLowerCase() !== String('n/a').toLocaleLowerCase()
-      const check2 = String(item).toLocaleLowerCase() !== String('-').toLocaleLowerCase()
+      const check1 =
+        String(item).toLocaleLowerCase() !==
+        String('n/a').toLocaleLowerCase();
+      const check2 =
+        String(item).toLocaleLowerCase() !==
+        String('-').toLocaleLowerCase();
       return check1 && check2;
-  });
+    });
   } else {
     return [];
   }
@@ -312,35 +350,31 @@ export function validateMinDeposit(
     bonus?.minDeposit
     ? false
     : jira?.minDeposit === 0.01 || bonus?.minDeposit
-      ? false
-      : jira?.minDeposit === 0;
+    ? false
+    : jira?.minDeposit === 0;
 }
 
 export const extractTierName = (description: string) => {
+  if (!description || !description.toLowerCase().includes('teir')) return [];
 
-  // if (!description || !description.toLowerCase().includes('teir')) return [];
+  let teirs = [];
 
-  let teirs = []
-
-  for ( const teir in TEIR_ID_MAPPING ){
-    teirs.push(TEIR_ID_MAPPING[teir])
+  for (const teir in TEIR_ID_MAPPING) {
+    teirs.push(TEIR_ID_MAPPING[teir]);
   }
 
-  const result: Record<string, number | null> = {};
-
+  const result: Record<string, number> = {};
   const lines: string[] = description.split(/\r?\n/);
 
   lines.forEach((line: string) => {
-    const tierFound: string | undefined = teirs.find((tier) => {
-        if (!tier) return false;
-        return line.toLowerCase().includes(tier.toLowerCase())
-      }
+    const tierFound: string | undefined = teirs.find((tier) =>
+      line.toLowerCase().includes(tier.toLowerCase()),
     );
 
     if (tierFound) {
       const match = line.match(/(\d[\d,\.]+)/);
       if (match) {
-        const points = match && match[1] ? parseInt(match[1].replace(/[^\d]/g, ''), 10) : null;
+        const points = parseInt(match[1].replace(/[^\d]/g, ''), 10);
         result[tierFound] = points;
       }
     }
@@ -369,33 +403,23 @@ export function validateTierPoints(
   bonusData: Record<string, number> | null,
 ): boolean {
   if (!jiraData || !bonusData) return false;
-  let tierIdToName: Record<string, string>;
 
-  // Recorrer las claves del objeto bonusData
   for (const tierId in bonusData) {
     const tierName = TEIR_ID_MAPPING[tierId];
-    if (!tierName) {
-      // Si no está en el mapa, lo ignoramos o retornamos false, depende de tu lógica
-      continue;
-    }
+    if (!tierName) continue;
 
-    // Puntos oficiales para este ID
     const officialPoints = bonusData[tierId];
 
-    // Buscar en jiraData
-    const found = jiraData.find((d) => String(d.name).toLowerCase() === String(tierName).toLowerCase());
-    if (!found) {
-      // Si no existe, mismatch
-      return false;
-    }
+    const found = jiraData.find(
+      (d) =>
+        String(d.name).toLowerCase() ===
+        String(tierName).toLowerCase(),
+    );
 
-    // Comparar valores
-    if (found.value !== officialPoints) {
-      return false;
-    }
+    if (!found) return false;
+    if (found.value !== officialPoints) return false;
   }
 
-  // Si no hubo problemas, true
   return true;
 }
 
@@ -405,8 +429,8 @@ export function convertTo24HourFormat(time?: string) {
 
 // Remove exported defaults or single file
 
-export const defaultStartTime = '12:00:00';
-export const defaultEndTime = '23:59:59';
+export const defaultStartTime = '10:00:00';
+export const defaultEndTime = '23:59:00';
 
 export function validateRecurrenceStartTime(
   jiraTime: string | undefined,
@@ -444,24 +468,23 @@ export function validateRecurrenceEndTime(
 function timeToSeconds(time: string) {
   if (typeof time !== 'string') return null;
   const [hh, mm, ss] = time.split(':').map(Number);
-  return hh !== undefined && mm !== undefined && ss !== undefined
-    ? hh * 3600 + mm * 60 + ss
-    : null;
+  return hh * 3600 + mm * 60 + ss;
 }
 
 export const extractCancellationWindow = (description?: string) => {
   if (!description) return null;
 
-  // Clean special characters like "+*" and "*"
   const cleanDescription = description
-    .replace(/[*+]/g, '') // Clean * and +
-    .replace(/\s+/g, ' ') // Replace multiple spaces with a single space
+    .replace(/[*+]/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
 
-  const match = cleanDescription.match(/Cancellation Window:\s*(\d+)\s*hours/i);
+  const match = cleanDescription.match(
+    /Cancellation Window:\s*(\d+)\s*hours/i,
+  );
 
   if (match) {
-    return match && match[1] ? parseInt(match[1], 10) * 3600 : null;
+    return parseInt(match[1], 10) * 3600;
   }
 
   return null;
@@ -473,7 +496,7 @@ export const extractGiftName = (description: string) => {
   const match = description.match(/Gift name:\s*([\S].*)/);
 
   if (match) {
-    return match && match[1] ? match[1].replace(/^[^\w\d]+/, '').trim() : null;
+    return match[1].replace(/^[^\w\d]+/, '').trim();
   }
 
   return null;
@@ -483,16 +506,23 @@ export const extractNumber = (str: string): number => {
   return _.toNumber(_.replace(str, /[^\d.-]/g, ''));
 };
 
-export const getValue = (FGW: any, FGWvalue: any, generalValue: any ) => {
+export const getValue = (
+  FGW: any,
+  FGWvalue: any,
+  generalValue: any,
+) => {
   return FGW ? FGWvalue : generalValue;
-}
+};
 
 export const extractBonusAmount = (str: string): number => {
-  // match numbers preceded by $ or standalone numbers not followed by any non-whitespace character
-  str = String(str).toLowerCase()?.replaceAll(',', '')
-    
-  const dollarAmt = str.match(/(?<=\$)\d+/g)?.[0] ?? null;
-  const standaloneNumber = str.match(/\b\d+\b(?![^\n]*\bpoints\b)/g)?.[0] ?? null;
+  str = String(str).toLowerCase()?.replaceAll(',', '');
 
-  return dollarAmt ? Number(dollarAmt) : Number(standaloneNumber);
-}
+  const dollarAmt =
+    str.match(/(?<=\$)\d+/g)?.[0] ?? null;
+  const standaloneNumber =
+    str.match(/\b\d+\b(?![^\n]*\bpoints\b)/g)?.[0] ?? null;
+
+  return dollarAmt
+    ? Number(dollarAmt)
+    : Number(standaloneNumber);
+};
