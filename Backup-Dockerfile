@@ -1,40 +1,26 @@
-# syntax=docker/dockerfile:1
+FROM node:20-alpine
 
-FROM node:20-alpine AS deps
 WORKDIR /app
 
-# install only production deps
-# supports either package-lock.json (npm ci) or no lockfile (npm install)
-COPY package.json ./
-COPY package-lock.json* ./
+# Copy only package.json and package-lock.json first to leverage Docker caching
+COPY package.json package-lock.json ./
 
-RUN if [ -f package-lock.json ]; then \
-      npm ci --omit=dev --no-audit --no-fund ; \
-    else \
-      npm install --omit=dev --no-audit --no-fund ; \
-    fi
+# Install production dependencies
+RUN npm install --omit=dev --no-audit --no-fund
 
+# Copy the compiled app and runtime tsconfig for alias resolution
+COPY dist ./dist
+COPY tsconfig.runtime.json ./tsconfig.json
 
-FROM node:20-alpine AS runner
-WORKDIR /app
+# Copy assets used by Express in production
+COPY src/views ./dist/views
+COPY src/public ./dist/public
 
+# Set environment variables
 ENV NODE_ENV=production
 
-# run as non-root
-RUN addgroup -S app && adduser -S app -G app
-USER app
-
-# deps
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/package.json ./package.json
-
-# app runtime files
-COPY --chown=app:app dist ./dist
-COPY --chown=app:app tsconfig.runtime.json ./tsconfig.json
-
-# assets used by express at runtime
-COPY --chown=app:app src/views ./dist/views
-COPY --chown=app:app src/public ./dist/public
-
+# Expose the application port
 EXPOSE 3001
+
+# Start the application
 CMD ["node", "-r", "tsconfig-paths/register", "dist/index.js"]
