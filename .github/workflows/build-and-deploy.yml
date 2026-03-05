@@ -55,7 +55,6 @@ jobs:
       # dokploy auto-deploy uses the webhook url from the app's Deployments tab
       # it redeploys when the tag matches what you configured in dokploy :contentReference[oaicite:1]{index=1}
       - name: trigger dokploy redeploy
-        if: ${{ secrets.DOKPLOY_WEBHOOK_URL != '' }}
         run: |
           curl -X POST http://152.53.177.163:3000/api/deploy/mAcycBR9N3ZzAB1NKnIjq \
             -H "Content-Type: application/json" \
