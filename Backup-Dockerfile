@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1
+
+FROM node:20-alpine AS deps
+WORKDIR /app
+
+# install only production deps
+# supports either package-lock.json (npm ci) or no lockfile (npm install)
+COPY package.json ./
+COPY package-lock.json* ./
+
+RUN if [ -f package-lock.json ]; then \
+      npm ci --omit=dev --no-audit --no-fund ; \
+    else \
+      npm install --omit=dev --no-audit --no-fund ; \
+    fi
+
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# run as non-root
+RUN addgroup -S app && adduser -S app -G app
+USER app
+
+# deps
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/package.json ./package.json
+
+# app runtime files
+COPY --chown=app:app dist ./dist
+COPY --chown=app:app tsconfig.runtime.json ./tsconfig.json
+
+# assets used by express at runtime
+COPY --chown=app:app src/views ./dist/views
+COPY --chown=app:app src/public ./dist/public
+
+EXPOSE 3001
+CMD ["node", "-r", "tsconfig-paths/register", "dist/index.js"]
